@@ -2,10 +2,10 @@
 be used with arithmetic/range coders.
 
 """
-
+from __future__ import annotations
 import abc
 import copy
-from typing import List
+from typing import List, Tuple, Union
 
 import numpy as np
 
@@ -156,3 +156,158 @@ class AdaptiveOrderKFreqModel(FreqModelBase):
         # sum to less than max_allowed_total_freq
         if np.sum(self.freqs_kplus1_tuple[current_tuple]) >= self.max_allowed_total_freq:
             self.freqs_kplus1_tuple[current_tuple] = np.max(self.freqs_kplus1_tuple[current_tuple] // 2, 1)
+
+
+
+class TreeNode():
+        lprob: float = 0.0
+        lktp: float = 0.0
+        a: int = 0
+        b: int = 0
+        left: Union[TreeNode, None] = None
+        right: Union[TreeNode, None] = None
+        label: str = ''
+        
+        @property 
+        def isLeaf(self) -> bool:
+            return self.left is None and self.right is None
+            
+        @property
+        def snapshot(self) -> TreeNode:
+            return copy.copy(self)
+        
+        def KTupdate(self, bit):
+            assert bit in (0, 1)
+            if bit == 0:
+                self.lktp += np.log2(self.a + 0.5) - np.log2(self.a + self.b + 1)
+                self.a += 1
+            else:
+                self.lktp += np.log2(self.b + 0.5) - np.log2(self.a + self.b + 1)
+                self.b += 1
+
+
+
+
+
+class ContextTreeWeightKFreqModel(FreqModelBase):
+    """Depth k adaptive CTW frequency model.
+
+    Parameters:
+        alphabet: the alphabet (provided as a list)
+        k:        the order, k >= 0 (kth order means we use past k to predict next, k=0 means iid)
+    """
+    k: int
+    past_k: List[int]
+    max_allowed_total_freq: int
+    alphabet: List[str]
+    root: TreeNode
+
+    def __init__(self, alphabet: List[str], k: int, max_allowed_total_freq: int):
+        assert k >= 0
+        assert len(alphabet) == 2
+        self.k = k
+        # map alphabet to index from 0 to len(alphabet) so we can use with numpy array
+        self.alphabet_to_idx = {alphabet[i]: i for i in range(len(alphabet))}
+        
+        self.max_allowed_total_freq = max_allowed_total_freq
+        # keep track of past k symbols (i.e., alphabet index) seen. Initialize with all 0s.
+        # Note that all zeros refers to the first element in the alphabet list. This is an
+        # arbitrary choice made to simplify later processing rather than doing special case
+        # for the first few symbols
+        self.past_k = [0] * k
+        self.alphabet = alphabet
+        self.root = TreeNode()
+
+
+    @property
+    def freqs_current(self):
+        old_log_prob = self.root.lprob
+        old_path = self.traverse(self.past_k, 0)
+        prob_zero = np.exp2(self.root.lprob - old_log_prob)
+        self.revert(old_path)
+        
+        probabilities = np.array( [ prob_zero, 1.0 - prob_zero ] ) 
+        frequencies = np.around((1 << 16) * probabilities).astype(int)
+    
+        return Frequencies(dict(zip(self.alphabet, frequencies)))
+
+
+    def update_model(self, s):
+        """function to update the probability model. This basically involves update the count
+        for the most recently seen (k+1) tuple.
+
+        - Arithmetic coder requires the `total_freq` to remain below a certain value
+        If the total_freq goes beyond, then we divide all freq by 2 (keeping minimum freq to 1)
+
+        Args:
+            s (Symbol): the next symbol
+        """
+        # updates the model based on the new symbol
+        # index self.freqs_kplus1_tuple using (past_k, s) [need to map s to index]
+        idx = self.alphabet_to_idx[s]
+        self.traverse(self.past_k, idx)
+
+        # if k > 0, update past_k list
+        if self.k > 0:
+            self.past_k = self.past_k[1:] + [ idx ]
+    
+    
+    def traverse(self, past_k, idx):
+        traversed = []
+        curr_node = self.root
+        traversed.append( (0, curr_node.snapshot, curr_node) )
+        curr_node.KTupdate(idx)
+        
+        for height in range(self.k):
+            mode = 0
+            if past_k[-(height + 1)] == 0:
+                if curr_node.left is None:
+                    curr_node.left = TreeNode()
+                    mode = 1
+                curr_node = curr_node.left
+            elif past_k[-(height + 1)] == 1:
+                if curr_node.right is None:
+                    curr_node.right = TreeNode()
+                    mode = 2
+                curr_node = curr_node.right
+            else:
+                assert False
+            
+            traversed.append( (mode, curr_node.snapshot, curr_node) )
+            curr_node.KTupdate(idx)
+        
+        for i in range(1, len(traversed) + 1):
+            node = traversed[-i][2]
+            if node.isLeaf:
+                node.lprob = node.lktp
+            else:
+                leftlp = 0.0
+                if node.left is not None:
+                    leftlp = node.left.lprob
+                rightlp = 0.0
+                if node.right is not None:
+                    rightlp = node.right.lprob
+                temp = np.exp2(node.lktp - 1) + np.exp2(leftlp + rightlp - 1)
+                if np.log(temp + 1.0E-10) < -24:
+                    print('GG')
+                node.lprob = np.log2( temp )
+                
+    
+        return traversed
+        
+    def revert(self, traversed):
+        for i, (mode, snapshot, node) in enumerate(traversed):
+            if mode == 0:
+                node.lprob = snapshot.lprob
+                node.lktp = snapshot.lktp
+                node.a = snapshot.a
+                node.b = snapshot.b
+            elif mode == 1:
+                del traversed[i-1][2].left
+                break
+            elif mode == 2:
+                del traversed[i-1][2].right
+                break
+            else:
+                assert False
+                

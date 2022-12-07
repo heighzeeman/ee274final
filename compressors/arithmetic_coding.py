@@ -4,6 +4,7 @@ from typing import Tuple, Any
 from compressors.probability_models import (
     AdaptiveIIDFreqModel,
     AdaptiveOrderKFreqModel,
+    ContextTreeWeightKFreqModel,
     FixedFreqModel,
     FreqModelBase,
 )
@@ -28,7 +29,7 @@ class AECParams:
     DATA_BLOCK_SIZE_BITS: int = 32
 
     # number of bits used to represent the arithmetic coder range
-    PRECISION: int = 32
+    PRECISION: int = 63
 
     def __post_init__(self):
         self.FULL: int = 1 << self.PRECISION
@@ -50,7 +51,7 @@ class ArithmeticEncoder(DataEncoder):
     """
 
     def __init__(
-        self, params: AECParams, freq_model_params: Frequencies, freq_model_cls: FreqModelBase
+        self, params: AECParams, freq_model_params, freq_model_cls: FreqModelBase
     ):
         self.params = params
 
@@ -77,11 +78,14 @@ class ArithmeticEncoder(DataEncoder):
         rng = high - low
         c = freqs.cumulative_freq_dict[s]
         d = c + freqs.frequency(s)
-
+        
+        #print('High:', high, 'low:', low, 'RNG:', rng, c, d)
         # perform shrinking of low, high
         # NOTE: this is the basic Arithmetic coding step implemented using integers
         high = low + (rng * d) // freqs.total_freq
         low = low + (rng * c) // freqs.total_freq
+        
+        #print('Low:', low, ' high:', high)
         return (low, high)
 
     def encode_block(self, data_block: DataBlock):
@@ -120,6 +124,7 @@ class ArithmeticEncoder(DataEncoder):
 
             # shrink range
             # i.e. the core Arithmetic encoding step
+            #print(self.freq_model.freqs_current)
             low, high = ArithmeticEncoder.shrink_range(self.freq_model.freqs_current, s, low, high)
             # update the freq model for encoding the next symbol
             self.freq_model.update_model(s)
@@ -136,8 +141,8 @@ class ArithmeticEncoder(DataEncoder):
                     encoded_bitarray.extend("0" + "1" * num_mid_range_readjust)
 
                     # re-adjust range, and reset params
-                    low = low << 1
-                    high = high << 1
+                    low = low * 2
+                    high = high * 2
                     num_mid_range_readjust = 0  # reset the mid-range readjustment counter
 
                 elif low > self.params.HALF:
@@ -145,16 +150,19 @@ class ArithmeticEncoder(DataEncoder):
                     encoded_bitarray.extend("1" + "0" * num_mid_range_readjust)
 
                     # re-adjust range, and reset params
-                    low = (low - self.params.HALF) << 1
-                    high = (high - self.params.HALF) << 1
+                    low = (low - self.params.HALF) * 2
+                    high = (high - self.params.HALF) * 2
                     num_mid_range_readjust = 0  # reset the mid-range readjustment counter
 
             # CASE III -> the more complex case where low, high straddle the midpoint
             while (low > self.params.QTR) and (high < 3 * self.params.QTR):
                 # increment the mid-range adjustment counter
+                #print(np.log2(low - self.params.QTR), self.params.QTR, np.log2(high - self.params.QTR))
                 num_mid_range_readjust += 1
-                low = (low - self.params.QTR) << 1
-                high = (high - self.params.QTR) << 1
+                low = (low - self.params.QTR) * 2
+                high = (high - self.params.QTR) * 2
+                assert low < high
+
 
         # Finally output a few bits to signal the final range + any remaining mid range readjustments
         num_mid_range_readjust += 1  # this increment is mainly to output either 01, 10
@@ -258,15 +266,15 @@ class ArithmeticDecoder(DataDecoder):
             while (high < self.params.HALF) or (low > self.params.HALF):
                 if high < self.params.HALF:
                     # re-adjust range, and reset params
-                    low = low << 1
-                    high = high << 1
-                    state = state << 1
+                    low = low * 2
+                    high = high * 2
+                    state = state * 2
 
                 elif low > self.params.HALF:
                     # re-adjust range, and reset params
-                    low = (low - self.params.HALF) << 1
-                    high = (high - self.params.HALF) << 1
-                    state = (state - self.params.HALF) << 1
+                    low = (low - self.params.HALF) * 2
+                    high = (high - self.params.HALF) * 2
+                    state = (state - self.params.HALF) * 2
 
                 if num_bits_consumed < arith_bitarray_size:
                     bit = encoded_bitarray[num_bits_consumed]
@@ -275,9 +283,9 @@ class ArithmeticDecoder(DataDecoder):
 
             while (low > self.params.QTR) and (high < 3 * self.params.QTR):
                 # increment the mid-range adjustment counter
-                low = (low - self.params.QTR) << 1
-                high = (high - self.params.QTR) << 1
-                state = (state - self.params.QTR) << 1
+                low = (low - self.params.QTR) * 2
+                high = (high - self.params.QTR) * 2
+                state = (state - self.params.QTR) * 2
 
                 if num_bits_consumed < arith_bitarray_size:
                     bit = encoded_bitarray[num_bits_consumed]
