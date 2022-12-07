@@ -13,7 +13,7 @@ import pickle
 import numpy as np
 
 # constants
-BLOCKSIZE = 1600  # encode in 50 KB blocks
+BLOCKSIZE = 50_000  # encode in 50 KB blocks
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-d", "--decompress", help="decompress", action="store_true")

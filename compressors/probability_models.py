@@ -287,12 +287,12 @@ class ContextTreeWeightKFreqModel(FreqModelBase):
                 rightlp = 0.0
                 if node.right is not None:
                     rightlp = node.right.lprob
-                temp = np.exp2(node.lktp - 1) + np.exp2(leftlp + rightlp - 1)
-                if np.log(temp + 1.0E-10) < -24:
-                    print('GG')
-                node.lprob = np.log2( temp )
-                
-    
+                temp = (node.lktp - 1) - (leftlp + rightlp - 1)
+                if temp > 0:
+                    node.lprob = (node.lktp - 1) + np.log1p(np.exp(-temp))
+                else:
+                    node.lprob = (leftlp + rightlp - 1) + np.log1p(np.exp(temp))
+
         return traversed
         
     def revert(self, traversed):
