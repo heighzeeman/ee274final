@@ -12,15 +12,29 @@ from core.encoded_stream import EncodedBlockReader, EncodedBlockWriter
 import pickle
 import numpy as np
 
+import cProfile
+import gc
+
 # constants
-BLOCKSIZE = 50_000  # encode in 50 KB blocks
+BLOCKSIZE = 10_000_000  # encode in 50 KB blocks
 
 parser = argparse.ArgumentParser()
+parser.add_argument("-t", "--test", help="run tests", action="store_true")
+parser.add_argument("-p", "--profile", help="run cProfile", action="store_true")
 parser.add_argument("-d", "--decompress", help="decompress", action="store_true")
-parser.add_argument("-i", "--input", help="input file", required=True, type=str)
-parser.add_argument("-o", "--output", help="output file", required=True, type=str)
+parser.add_argument("-i", "--input", help="input file", type=str)
+parser.add_argument("-o", "--output", help="output file", type=str)
 
 
+def test_sunehag():
+    ctw = ContextTreeWeightKFreqModel([0, 1], 3, 1 << 61, [1, 1, 0])
+    source = [0, 1, 0, 0, 1, 1, 0]
+    for bit in source:
+        ctw.update_model(bit) 
+    print(np.exp2(ctw.root.lprob) * 2048)   
+    ctw.update_model(0)
+    print(np.exp2(ctw.root.lprob) * 65536)
+    
 
 class AECEmpiricalEncoder(DataEncoder):
     def encode_block(self, data_block: DataBlock):
@@ -69,11 +83,24 @@ class AECEmpiricalDecoder(DataDecoder):
                 self.decode(reader, fds)
 
 
-if __name__ == "__main__":
-    args = parser.parse_args()
-    if args.decompress:
+def main(args):
+    tests = [ test_sunehag ]
+    if args.test:
+        for test_fn in tests:
+            test_fn()
+            
+    elif args.decompress:
         decoder = AECEmpiricalDecoder()
         decoder.decode_file(args.input, args.output)
     else:
         encoder = AECEmpiricalEncoder()
         encoder.encode_file(args.input, args.output, block_size=BLOCKSIZE)
+    
+
+if __name__ == "__main__":
+    args = parser.parse_args()
+    if args.profile:
+        cProfile.run('main(args)')
+    else:
+        main(args)
+    

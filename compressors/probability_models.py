@@ -5,9 +5,10 @@ be used with arithmetic/range coders.
 from __future__ import annotations
 import abc
 import copy
-from typing import List, Tuple, Union
+from typing import List, Tuple, Optional
 
 import numpy as np
+import numexpr as ne
 
 from core.prob_dist import Frequencies
 
@@ -158,14 +159,13 @@ class AdaptiveOrderKFreqModel(FreqModelBase):
             self.freqs_kplus1_tuple[current_tuple] = np.max(self.freqs_kplus1_tuple[current_tuple] // 2, 1)
 
 
-
 class TreeNode():
         lprob: float = 0.0
         lktp: float = 0.0
         a: int = 0
         b: int = 0
-        left: Union[TreeNode, None] = None
-        right: Union[TreeNode, None] = None
+        left: Optional[TreeNode] = None
+        right: Optional[TreeNode] = None
         label: str = ''
         
         @property 
@@ -173,11 +173,10 @@ class TreeNode():
             return self.left is None and self.right is None
             
         @property
-        def snapshot(self) -> TreeNode:
-            return copy.copy(self)
+        def snapshot(self) -> Tuple[float, float, int, int]:
+            return (self.lprob, self.lktp, self.a, self.b)
         
         def KTupdate(self, bit):
-            assert bit in (0, 1)
             if bit == 0:
                 self.lktp += np.log2(self.a + 0.5) - np.log2(self.a + self.b + 1)
                 self.a += 1
@@ -202,7 +201,7 @@ class ContextTreeWeightKFreqModel(FreqModelBase):
     alphabet: List[str]
     root: TreeNode
 
-    def __init__(self, alphabet: List[str], k: int, max_allowed_total_freq: int):
+    def __init__(self, alphabet: List[str], k: int, max_allowed_total_freq: int, past_k: Optional[List[int]] = None):
         assert k >= 0
         assert len(alphabet) == 2
         self.k = k
@@ -214,7 +213,11 @@ class ContextTreeWeightKFreqModel(FreqModelBase):
         # Note that all zeros refers to the first element in the alphabet list. This is an
         # arbitrary choice made to simplify later processing rather than doing special case
         # for the first few symbols
-        self.past_k = [0] * k
+        if past_k is None:
+            self.past_k = [0] * k
+        else:
+            assert len(past_k) == k
+            self.past_k = past_k
         self.alphabet = alphabet
         self.root = TreeNode()
 
@@ -287,26 +290,22 @@ class ContextTreeWeightKFreqModel(FreqModelBase):
                 rightlp = 0.0
                 if node.right is not None:
                     rightlp = node.right.lprob
-                temp = (node.lktp - 1) - (leftlp + rightlp - 1)
-                if temp > 0:
-                    node.lprob = (node.lktp - 1) + np.log1p(np.exp(-temp))
-                else:
-                    node.lprob = (leftlp + rightlp - 1) + np.log1p(np.exp(temp))
+                
+                node.lprob = np.logaddexp2( node.lktp, leftlp + rightlp ) - 1  #0.6931471805599453094172321214581765680755001343602552541206800094
 
         return traversed
         
     def revert(self, traversed):
         for i, (mode, snapshot, node) in enumerate(traversed):
             if mode == 0:
-                node.lprob = snapshot.lprob
-                node.lktp = snapshot.lktp
-                node.a = snapshot.a
-                node.b = snapshot.b
+                node.lprob, node.lktp, node.a, node.b = snapshot
             elif mode == 1:
-                del traversed[i-1][2].left
+                traversed[i-1][2].left = None
+                #del traversed[i-1][2].left
                 break
             elif mode == 2:
-                del traversed[i-1][2].right
+                traversed[i-1][2].right = None
+                #del traversed[i-1][2].right
                 break
             else:
                 assert False
