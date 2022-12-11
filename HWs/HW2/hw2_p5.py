@@ -15,12 +15,18 @@ class BurrowsWheelerTransform:
 
         # create a string using data_block
         input_block_str = "".join(data_block.data_list)
-
+        
         ###############################################
         # ADD CODE HERE
         # to generate bwt_str (BWT transformed string)
         # Note: remember to add the delimiter to the string!
-        raise NotImplementedError("Implement this function")
+        s = input_block_str + self.delimiter
+        matrix = [ s ]
+        for _ in range(len(s) - 1):
+            s = s[-1] + s[:-1]
+            matrix.append(s)
+        matrix.sort()
+        bwt_str = "".join([st[-1] for st in matrix])
         ###############################################
 
         data_bwt_block = DataBlock(list(bwt_str))
@@ -39,7 +45,15 @@ class BurrowsWheelerTransform:
         # ADD CODE HERE
         # to generate output_str
         # Note: remember to remove the delimiter from the string!
-        raise NotImplementedError("Implement this function")
+        matrix = [ ch for ch in bwt_block_str ]
+        for _ in range(N - 1):
+            matrix.sort()
+            matrix = [ bwt_block_str[i] + matrix[i] for i in range(N) ]
+            
+        for s in matrix:
+            if s[-1] == self.delimiter:
+                output_str = s[:-1]
+                break
         ###############################################
 
         return DataBlock(list(output_str))

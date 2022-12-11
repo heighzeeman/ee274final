@@ -36,10 +36,10 @@ def generate_samples_vanilla(freqs: Frequencies, data_size):
     for _ in range(data_size):
         # sample a uniform random variable in [0, 1)
         u = np.random.rand()
-
-        ###############################################
-        # ADD CODE HERE
-        raise NotImplementedError("You need to implement this part")
+        
+        for i in range(len(symbol_list)):
+            if u >= cumul_list[i] and u < cumul_list[i+1]:
+                generated_samples_list.append(symbol_list[i])
         ###############################################
 
     return DataBlock(generated_samples_list)

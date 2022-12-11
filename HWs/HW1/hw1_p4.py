@@ -2,7 +2,7 @@
 HW1 Q4
 """
 from typing import Any, Tuple
-from utils.bitarray_utils import BitArray
+from utils.bitarray_utils import BitArray, uint_to_bitarray, bitarray_to_uint
 from utils.test_utils import get_random_data_block, try_lossless_compression
 from compressors.prefix_free_compressors import (
     PrefixFreeEncoder,
@@ -10,6 +10,7 @@ from compressors.prefix_free_compressors import (
     PrefixFreeTree,
 )
 from core.prob_dist import ProbabilityDist, get_avg_neg_log_prob
+import numpy as np
 
 
 class ShannonTreeEncoder(PrefixFreeEncoder):
@@ -31,9 +32,20 @@ class ShannonTreeEncoder(PrefixFreeEncoder):
         codebook = {}
 
         ############################################################
-        # ADD CODE HERE
-        raise NotImplementedError("You need to implement generate_shannon_tree_codebook function in "
-                                  "ShannonTreeEncoder class")
+        last_assigned = ''
+        for symbol, prob in sorted_prob_dist.prob_dict.items():
+            length = int(np.ceil(np.log2(1.0/ prob)))
+            if len(codebook) > 0:
+                largest_array = BitArray(max(codebook.values()))
+                largest_code = bitarray_to_uint(largest_array)
+                len_largest = len(largest_array)
+            else:
+                largest_code = -1
+                len_largest = 1
+
+            new_prefix = uint_to_bitarray(largest_code + 1, bit_width=len_largest).to01()
+            code = new_prefix + '0' * (length - len(new_prefix))
+            codebook[symbol] = BitArray(code)
         ############################################################
 
         return codebook
@@ -57,8 +69,17 @@ def test_shannon_tree_coding_specific_case():
     # NOTE -> this test must succeed with your implementation
     ############################################################
     # Add the computed expected codewords for distributions presented in part 1 to these list to improve the test
-    raise NotImplementedError("Add the computed expected codewords for distributions presented in part 1 "
-                              "to these list to improve the test")
+    distributions = [
+        ProbabilityDist({"A": 0.25, "B": 0.25, "C": 0.25, "D": 0.25}),
+        ProbabilityDist({"A": 0.5, "B": 0.25, "C": 0.12, "D": 0.13}),
+        ProbabilityDist({"A": 0.9, "B": 0.1})
+    ]
+    expected_codewords = [
+        { 'A': '00', 'B': '01', 'C': '10', 'D': '11' },
+        { 'A': '0', 'B': '10', 'C': '1110', 'D': '110' },
+        { 'A': '0', 'B': '1000' }
+    ]
+    expected_codewords = [{ k: BitArray(v) for k, v in dct.items()} for dct in expected_codewords]
     ############################################################
 
     def test_encoded_symbol(prob_dist, expected_codeword_dict):

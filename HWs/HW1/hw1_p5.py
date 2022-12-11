@@ -10,12 +10,16 @@ def compute_minimal_effort(rope_lengths_arr: List[float]) -> float:
     lengths_arr -> list of rope lengths (positive floating points)
     output -> the value of the minimum effort in joining all the ropes together 
     """
-    effort = None
-    ############################################################
-    # Q5.3: Add code here to compute the minimal effort
-    ############################################################
-    raise NotImplementedError("Please implement compute_minimal_effort function")
-    ############################################################
+    effort = 0
+    while len(rope_lengths_arr) > 1:
+        shortest = min(rope_lengths_arr)
+        rope_lengths_arr.remove(shortest)
+        second_shortest = min(rope_lengths_arr)
+        rope_lengths_arr.remove(second_shortest)
+        
+        rope_lengths_arr.append(shortest + second_shortest)
+        effort += shortest + second_shortest
+        
     return effort
 
 

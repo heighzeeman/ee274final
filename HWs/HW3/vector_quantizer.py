@@ -66,7 +66,8 @@ def build_kmeans_codebook(
     # (added here to inform the expected return shape)
     codebook = np.zeros((num_vectors, dim)) 
     data_npy_2d = np.reshape(data_npy, [-1, dim])
-
+    
+    
     # TODO: add code here to set the codebook appropriately
     # using K-means. 
     # NOTE: don't directly call scipy/numpy library func 
@@ -75,6 +76,26 @@ def build_kmeans_codebook(
     # functions
 
     #####################################################
+    N = data_npy_2d.shape[0]
+    
+    # Use K-means++ inspired initialization (greedily choose point which is furthest from all current centroids)
+    codebook[0] = data_npy_2d[np.random.choice(N)]
+    for i in range(1, num_vectors):
+        min_distances = [find_nearest(codebook[:i], data_npy_2d[j], mse)[1] for j in range(N)]
+        max_ind = np.argmax(min_distances)
+        codebook[i] = data_npy_2d[max_ind]
+        
+    prev_distortion = np.mean( [find_nearest(codebook, data_npy_2d[j], mse)[1] for j in range(N)] )
+    for it in range(1, max_iter + 1):
+        min_dist_idxs = np.array([find_nearest(codebook, data_npy_2d[j], mse)[0] for j in range(N)])
+        for i in range(num_vectors):
+            codebook[i] = np.mean(data_npy_2d[np.where(min_dist_idxs == i)], axis=0)
+        curr_distortion = np.mean( [find_nearest(codebook, data_npy_2d[j], mse)[1] for j in range(N)] )
+        conv = (curr_distortion / prev_distortion) - 1
+        if abs(conv) < 1E-4:
+            break
+        prev_distortion = curr_distortion
+        
     return codebook
 
 

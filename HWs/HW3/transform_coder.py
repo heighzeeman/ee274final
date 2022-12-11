@@ -76,8 +76,25 @@ class TransformVQDecoder(DataDecoder):
         # NOTE: please add inline comments (more comments never hurt!)
         #####################################################################
         
-        # return decoded_data, num_bits_consumed
-        pass
+        tot_bits_decoded = 0
+        data_coeff_2d_T = [] # Transpose of the data_coeff_2d matrix we will reconstruct
+        
+        for coeff_id in range(self.transform.dim):
+            # We will try to decode data_coeff_2d[:,coeff_id] transpose
+            codebook = self.codebooks_per_coeff[coeff_id] #codebook corresp to the coeff            
+            if codebook is not None:
+                vq_dec = VQDecoder(codebook)
+                data_npy_decoded, num_bits_consumed = vq_dec.decode_block(encoded_bitarray[tot_bits_decoded:])
+                data_coeff_2d_T.append(data_npy_decoded)
+                tot_bits_decoded += num_bits_consumed
+            else:
+                coeff_data_len = bitarray_to_uint(encoded_bitarray[tot_bits_decoded:])
+                data_coeff_2d_T.append([0.0] * coeff_data_len)
+                tot_bits_decoded += 32
+                
+        data_coeff_2d = np.transpose(data_coeff_2d_T)
+        
+        return self.transform.inverse(data_coeff_2d), tot_bits_decoded
         #####################################################################
 
 def _transform_coding_experiment(data_npy, transform: LinearTransform, vq_dim: int, num_vectors_per_coeff: list):

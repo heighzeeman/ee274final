@@ -42,6 +42,8 @@ if __name__ == "__main__":
     # joint compression
     encoder = LZ77Encoder(initial_window=window_initialization)
     encoded = encoder.encode_block(DataBlock(concatenated_data))
+    with open('meme.txt', 'w') as f:
+        f.write(''.join(concatenated_data))
     total_size_jointly_compressed = len(encoded)
     print("Number of files:", num_files)
     print("Total uncompressed size (in bits):", total_uncompressed_size*8)

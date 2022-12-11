@@ -3,11 +3,12 @@ from core.data_encoder_decoder import DataDecoder, DataEncoder
 from core.data_block import DataBlock
 import argparse
 from core.prob_dist import ProbabilityDist
-from utils.bitarray_utils import BitArray, uint_to_bitarray, bitarray_to_uint
+from utils.bitarray_utils import BitArray, uint_to_bitarray, bitarray_to_uint, float_to_bitarrays, bitarrays_to_float
 from compressors.huffman_coder import HuffmanEncoder, HuffmanDecoder, HuffmanTree
 from core.data_stream import Uint8FileDataStream
 from core.encoded_stream import EncodedBlockReader, EncodedBlockWriter
 import pickle
+import numpy as np
 
 # constants
 BLOCKSIZE = 50_000  # encode in 50 KB blocks
@@ -29,9 +30,21 @@ def encode_prob_dist(prob_dist: ProbabilityDist) -> BitArray:
         BitArray: encoded bit array
     """
     #########################
-    # ADD CODE HERE
+    encoded_probdist_bitarray = BitArray('1111111111111111')
+    assert(len(encoded_probdist_bitarray) == 16)
+    counts = 0
+    for i in range(256):
+        if i in prob_dist.prob_dict:
+            counts += 1
+            prob_as_bitarray = uint_to_bitarray(int(np.round(prob_dist.prob_dict[i], 8) * np.power(2, 31)), bit_width=32)
+            i_as_bitarray = uint_to_bitarray(i, bit_width=8)
+            concatenated = i_as_bitarray + prob_as_bitarray
+            encoded_probdist_bitarray += concatenated
+            
+    
+    encoded_probdist_bitarray[:16] = uint_to_bitarray(counts, bit_width=16)
     # bits = BitArray(), bits.frombytes(byte_array), uint_to_bitarray might be useful to implement this
-    raise NotImplementedError("You need to implement encode_prob_dist")
+    assert(len(encoded_probdist_bitarray) == 16 + counts * 40)
     #########################
 
     return encoded_probdist_bitarray
@@ -50,7 +63,18 @@ def decode_prob_dist(bitarray: BitArray) -> Tuple[ProbabilityDist, int]:
     #########################
     # ADD CODE HERE
     # bitarray.tobytes() and bitarray_to_uint() might be useful to implement this
-    raise NotImplementedError("You need to implement decode_prob_dist")
+    read = 0
+    counts = bitarray_to_uint(bitarray[:16])
+    prob_dict = {}
+    
+    for i in range(counts):
+        data = bitarray[16+i*40:56+i*40]
+        symbol = bitarray_to_uint(data[:8])
+        prob = np.round(bitarray_to_uint(data[8:40]) / np.power(2, 31), 8)
+        prob_dict[symbol] = prob
+    
+    prob_dist = ProbabilityDist(prob_dict)
+    num_bits_read = 16 + counts * 40
     #########################
 
     return prob_dist, num_bits_read

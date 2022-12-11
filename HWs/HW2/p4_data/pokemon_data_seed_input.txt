@@ -1,1 +1,49 @@
-# Fill this file with the seed for pokemon_data. Remove this line before running!!
+  "Not in Eggs"
+   Candy",
+   "egg": "Not in Eggs"
+   "candy": "None",
+  .png",
+  "
+  "id": 
+,
+  "num": "
+,
+  "name": "
+,
+  "img": "http://www.serebii.net/pokemongo/pokemon/0
+  "type": [
+  "height": "
+  "weight": "
+  "candy": "
+  "candy_count": 
+,
+  "egg": "
+,
+  "spawn_chance": 
+,
+  "avg_spawns": 
+,
+  "spawn_time": "
+  "multipliers": 
+  "weaknesses":
+  "prev_evolution": [
+    {
+  "next_evolution": [
+    "Normal",
+	"Fire",
+	"Water",
+	"Electric"
+    "Grass",
+    "Ice",
+	"Fighting",
+    "Poison",
+	"Ground",
+    "Flying",
+	"Psychic",
+    "Bug",
+	"Rock",
+    "Ghost",
+	"Dragon",
+    "Dark",
+	"Steel",
+	"Fairy"
