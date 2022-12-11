@@ -178,10 +178,10 @@ class TreeNode():
         
         def KTupdate(self, bit):
             if bit == 0:
-                self.lktp += np.log2(self.a + 0.5) - np.log2(self.a + self.b + 1)
+                self.lktp += np.log2(self.a * 2 + 1) - 1 - np.log2(self.a + self.b + 1)
                 self.a += 1
             else:
-                self.lktp += np.log2(self.b + 0.5) - np.log2(self.a + self.b + 1)
+                self.lktp += np.log2(self.b * 2 + 1) - 1 - np.log2(self.a + self.b + 1)
                 self.b += 1
 
 

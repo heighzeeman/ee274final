@@ -17,6 +17,7 @@ import gc
 
 # constants
 BLOCKSIZE = 10_000_000  # encode in 50 KB blocks
+DEPTH = 48
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-t", "--test", help="run tests", action="store_true")
@@ -24,7 +25,7 @@ parser.add_argument("-p", "--profile", help="run cProfile", action="store_true")
 parser.add_argument("-d", "--decompress", help="decompress", action="store_true")
 parser.add_argument("-i", "--input", help="input file", type=str)
 parser.add_argument("-o", "--output", help="output file", type=str)
-
+parser.add_argument("-k", "--order", help="max order of context trees", type=int, default=DEPTH)
 
 def test_sunehag():
     ctw = ContextTreeWeightKFreqModel([0, 1], 3, 1 << 61, [1, 1, 0])
@@ -37,9 +38,11 @@ def test_sunehag():
     
 
 class AECEmpiricalEncoder(DataEncoder):
+    def __init__(self, depth=DEPTH):
+        self.depth = depth
     def encode_block(self, data_block: DataBlock):
         aec_params = AECParams()
-        aec_encoder = ArithmeticEncoder(aec_params, ([0, 1], 48), ContextTreeWeightKFreqModel)
+        aec_encoder = ArithmeticEncoder(aec_params, ([0, 1], self.depth), ContextTreeWeightKFreqModel)
         # encode the data with Huffman code
         encoded_data = aec_encoder.encode_block(data_block)
         # return the Huffman encoding prepended with the encoded probability distribution
@@ -59,9 +62,12 @@ class AECEmpiricalEncoder(DataEncoder):
 
 
 class AECEmpiricalDecoder(DataDecoder):
+    def __init__(self, depth=DEPTH):
+        self.depth = depth
+
     def decode_block(self, encoded_block: DataBlock):        
         aec_params = AECParams()
-        aec_decoder = ArithmeticDecoder(aec_params, ([0, 1], 48), ContextTreeWeightKFreqModel)
+        aec_decoder = ArithmeticDecoder(aec_params, ([0, 1], self.depth), ContextTreeWeightKFreqModel)
 
         # now apply Huffman decoding
         decoded_data, num_bits_read = aec_decoder.decode_block(
@@ -90,10 +96,10 @@ def main(args):
             test_fn()
             
     elif args.decompress:
-        decoder = AECEmpiricalDecoder()
+        decoder = AECEmpiricalDecoder(args.order)
         decoder.decode_file(args.input, args.output)
     else:
-        encoder = AECEmpiricalEncoder()
+        encoder = AECEmpiricalEncoder(args.order)
         encoder.encode_file(args.input, args.output, block_size=BLOCKSIZE)
     
 
