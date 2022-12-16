@@ -1,5 +1,5 @@
 from compressors.arithmetic_coding import AECParams, ArithmeticEncoder, ArithmeticDecoder
-from compressors.probability_models import ContextTreeWeightKFreqModel
+from compressors.probability_models import ContextTreeWeightingKFreqModel
 from core.prob_dist import Frequencies, ProbabilityDist
 
 from typing import Tuple
@@ -15,8 +15,9 @@ import numpy as np
 import cProfile
 import gc
 
+
 # constants
-BLOCKSIZE = 10_000_000  # encode in 50 KB blocks
+BLOCKSIZE = 900_000  # encode in 900 KB blocks
 DEPTH = 48
 
 parser = argparse.ArgumentParser()
@@ -27,22 +28,13 @@ parser.add_argument("-i", "--input", help="input file", type=str)
 parser.add_argument("-o", "--output", help="output file", type=str)
 parser.add_argument("-k", "--order", help="max order of context trees", type=int, default=DEPTH)
 
-def test_sunehag():
-    ctw = ContextTreeWeightKFreqModel([0, 1], 3, 1 << 61, [1, 1, 0])
-    source = [0, 1, 0, 0, 1, 1, 0]
-    for bit in source:
-        ctw.update_model(bit) 
-    print(np.exp2(ctw.root.lprob) * 2048)   
-    ctw.update_model(0)
-    print(np.exp2(ctw.root.lprob) * 65536)
-    
 
 class AECEmpiricalEncoder(DataEncoder):
     def __init__(self, depth=DEPTH):
         self.depth = depth
     def encode_block(self, data_block: DataBlock):
         aec_params = AECParams()
-        aec_encoder = ArithmeticEncoder(aec_params, ([0, 1], self.depth), ContextTreeWeightKFreqModel)
+        aec_encoder = ArithmeticEncoder(aec_params, ([0, 1], self.depth), ContextTreeWeightingKFreqModel)
         # encode the data with Huffman code
         encoded_data = aec_encoder.encode_block(data_block)
         # return the Huffman encoding prepended with the encoded probability distribution
@@ -67,7 +59,7 @@ class AECEmpiricalDecoder(DataDecoder):
 
     def decode_block(self, encoded_block: DataBlock):        
         aec_params = AECParams()
-        aec_decoder = ArithmeticDecoder(aec_params, ([0, 1], self.depth), ContextTreeWeightKFreqModel)
+        aec_decoder = ArithmeticDecoder(aec_params, ([0, 1], self.depth), ContextTreeWeightingKFreqModel)
 
         # now apply Huffman decoding
         decoded_data, num_bits_read = aec_decoder.decode_block(
@@ -89,8 +81,26 @@ class AECEmpiricalDecoder(DataDecoder):
                 self.decode(reader, fds)
 
 
+# Tests for the CTW probability model
+def test_sunehag():
+    ctw = ContextTreeWeightingKFreqModel([0, 1], 3, 1 << 61, [1, 1, 0])
+    source = [0, 1, 0, 0, 1, 1, 0]
+    for bit in source:
+        ctw.update_model(bit) 
+    np.testing.assert_almost_equal(np.exp2(ctw.root.lprob), 7/2048)  
+    ctw.update_model(0)
+    np.testing.assert_almost_equal(np.exp2(ctw.root.lprob), 153/65536)
+    
+def test_willems():
+    ctw = ContextTreeWeightingKFreqModel([0, 1], 3, 1 << 61, [0, 1, 0])
+    source = [0, 1, 1, 0, 1, 0, 0]
+    for bit in source:
+        ctw.update_model(bit) 
+    np.testing.assert_almost_equal(np.exp2(ctw.root.lprob), 95/32768)
+
+
 def main(args):
-    tests = [ test_sunehag ]
+    tests = [ test_sunehag, test_willems ]
     if args.test:
         for test_fn in tests:
             test_fn()

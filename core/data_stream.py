@@ -259,32 +259,37 @@ class Uint8FileDataStream(FileDataStream):
 
 
 class BitFileDataStream(FileDataStream):
-    """reads Uint8 numbers written to a file"""
+    """reads bits from a file, by reading byte-wise and then reading bits from each byte"""
     num_read = 0
     read_byte = 0
     num_write = 0
     write_byte = 0
     
     def get_symbol(self):
-        """get the next byte from the text file as 8-bit unsigned int
+        """Get the next bit from the text file, reading in the next byte first as
+        a 8-bit unsigned int if necessary. Reads out least-significant bit first.
 
         Returns:
-            (int, None): the next byte, None if we reached the end of stream
+            (int, None): the next bit, None if we reached the end of stream
         """
         if self.num_read == 0:
+            # No partially read byte, have to retrieve next from file
             self.read_byte = self.file_obj.read(1)
             if not self.read_byte:
                 return None
             self.read_byte = int.from_bytes(self.read_byte, byteorder="big")
-            
             # byteorder doesn't really matter because we just have a single byte
+        
+        # Retrieve the next unread bit from the current partially read byte
         result = (self.read_byte >> self.num_read) & 1
         self.num_read = (self.num_read + 1) % 8
             
         return result
 
     def write_symbol(self, s):
-        """write an 8-bit unsigned int to the text file"""
+        """Write a bit to the text file. packs bits into bytes then writes them byte-wise.
+        More recently written bits (of a byte) are in the higher bits of the byte.
+        """
         assert s in (0, 1)
         
         self.write_byte |= s << self.num_write

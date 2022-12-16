@@ -4,7 +4,7 @@ from typing import Tuple, Any
 from compressors.probability_models import (
     AdaptiveIIDFreqModel,
     AdaptiveOrderKFreqModel,
-    ContextTreeWeightKFreqModel,
+    ContextTreeWeightingKFreqModel,
     FixedFreqModel,
     FreqModelBase,
 )
